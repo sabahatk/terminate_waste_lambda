@@ -19,21 +19,37 @@ def terminate_instances(client):
                     if tag["Value"] == "Project: Finance Audit" and instance["State"]["Name"] != "terminated":
                         terminate_instance(client, instance["InstanceId"])
 
-'''def terminate_volumes(client):
-    ec2 = boto3.resource("ec2")
+def delete_volumes(client):
     #Filter out only available volumes, as those that are in-use will be deleted when the instance is terminated.
-    available_volumes = ec2.volumes.filter(
+    response = client.describe_volumes(
     Filters=[{'Name': 'status', 'Values': ['available']}]
     )
+    available_volumes = response["Volumes"]
+
     for volume in available_volumes:
-        volume.delete()
-        print(volume["VolumeId"], "deleted.")'''
+        client.delete_volume(VolumeId=volume["VolumeId"])
+        print(volume["VolumeId"], "deleted.")
+
+def release_elastic_ips(client):
+    response = client.describe_addresses()
+    print("RESPONSE:", response)
+    addresses = response["Addresses"]
+
+    for address in addresses:
+        #if "Tags" in address:
+            #for tag in address["Tags"]:
+                #if tag["Value"] == "Project: Finance Audit":
+        if "AssociationId" not in address:
+            client.release_address(AllocationId=address["AllocationId"])
+        print(address["PublicIp"], "released.")
+
 
 def lambda_handler(event, context):
     ec2 = boto3.client("ec2")
     sns = boto3.client("sns")
     terminate_instances(ec2)
-    #terminate_volumes(ec2)
+    delete_volumes(ec2)
+    release_elastic_ips(ec2)
     sns.publish(
         TopicArn="arn:aws:sns:us-east-1:963527046541:TerminateWaste",
         Message="All instances tagged with 'Project: Finance Audit' have been terminated.",
